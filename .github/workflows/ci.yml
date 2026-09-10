@@ -80,7 +80,7 @@ jobs:
       - name: Start the stack
         run: |
           cp .env.example .env
-          docker compose up --build -d
+          docker compose up --build -d --wait --wait-timeout 180
       - name: Smoke test
         run: ./scripts/smoke.sh
       - name: Service logs
