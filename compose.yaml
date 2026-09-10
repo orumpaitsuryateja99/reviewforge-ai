@@ -1,0 +1,125 @@
+name: reviewforge
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-reviewforge}
+      POSTGRES_USER: ${POSTGRES_USER:-reviewforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reviewforge}
+    volumes:
+      - reviewforge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [app]
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - reviewforge-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app]
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-reviewforge}
+      DB_USERNAME: ${POSTGRES_USER:-reviewforge}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-reviewforge}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_TIMEOUT: ${REDIS_TIMEOUT:-5s}
+      APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:-http://localhost:3000}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_APP_PRIVATE_KEY_BASE64: ${GITHUB_APP_PRIVATE_KEY_BASE64:-}
+      GITHUB_API_VERSION: ${GITHUB_API_VERSION:-2026-03-10}
+      GITHUB_API_TIMEOUT: ${GITHUB_API_TIMEOUT:-2m}
+      GITHUB_OAUTH_CALLBACK_URL: ${GITHUB_OAUTH_CALLBACK_URL:-http://localhost:8080/api/v1/auth/github/callback}
+      GITHUB_SETUP_CALLBACK_URL: ${GITHUB_SETUP_CALLBACK_URL:-http://localhost:8080/api/v1/github/installations/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
+      LLM_EFFORT: ${LLM_EFFORT:-HIGH}
+      JOB_WORKERS: ${JOB_WORKERS:-2}
+      RUNNER_URL: ${RUNNER_URL:-http://runner:8090}
+      RUNNER_ENABLED: ${RUNNER_ENABLED:-true}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      runner:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [app, runner]
+
+  # Separate trust boundary: it receives a source snapshot, a patch, and a run policy.
+  # It is deliberately not published on the host and holds no credential of any kind.
+  runner:
+    build:
+      context: ./runner
+    environment:
+      RUNNER_MAX_RUN_SECONDS: ${RUNNER_MAX_RUN_SECONDS:-600}
+      RUNNER_DEFAULT_RUN_SECONDS: ${RUNNER_RUN_TIMEOUT_SECONDS:-300}
+      RUNNER_MAX_EXTRACTED_BYTES: ${RUNNER_MAX_EXTRACTED_BYTES:-536870912}
+      RUNNER_MAX_SNAPSHOT_SIZE: ${RUNNER_MAX_SNAPSHOT_SIZE:-200MB}
+      RUNNER_MAVEN_OFFLINE: ${RUNNER_MAVEN_OFFLINE:-true}
+      RUNNER_MAVEN_REPOSITORY: /opt/reviewforge-m2/repository
+    read_only: true
+    tmpfs:
+      - /tmp:size=768m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1536m
+    cpus: 1.5
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/runner/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+    networks: [runner]
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8080}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [app]
+
+volumes:
+  reviewforge-postgres:
+  reviewforge-redis:
+
+networks:
+  app:
+  runner:
+    internal: true

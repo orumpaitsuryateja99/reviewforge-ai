@@ -1,0 +1,104 @@
+spring:
+  application:
+    name: reviewforge-api
+  datasource:
+    # DB_HOST/DB_PORT/DB_NAME let managed hosts inject discrete connection details.
+    # DB_URL remains the highest-priority override used by Docker Compose and local runs.
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:reviewforge}}
+    username: ${DB_USERNAME:reviewforge}
+    password: ${DB_PASSWORD:reviewforge}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Must exceed the blocking job-queue poll timeout, otherwise an idle queue is reported
+      # as a Redis failure instead of a normal empty poll.
+      timeout: ${REDIS_TIMEOUT:5s}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-migration-naming: true
+  jackson:
+    default-property-inclusion: non_null
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    version: @project.version@
+
+reviewforge:
+  version: @project.version@
+  web:
+    allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:3000}
+  github:
+    app-id: ${GITHUB_APP_ID:}
+    app-slug: ${GITHUB_APP_SLUG:}
+    client-id: ${GITHUB_CLIENT_ID:}
+    client-secret: ${GITHUB_CLIENT_SECRET:}
+    private-key-base64: ${GITHUB_APP_PRIVATE_KEY_BASE64:}
+    api-url: ${GITHUB_API_URL:https://api.github.com}
+    api-version: ${GITHUB_API_VERSION:2026-03-10}
+    api-timeout: ${GITHUB_API_TIMEOUT:2m}
+    oauth-callback-url: ${GITHUB_OAUTH_CALLBACK_URL:http://localhost:8080/api/v1/auth/github/callback}
+    setup-callback-url: ${GITHUB_SETUP_CALLBACK_URL:http://localhost:8080/api/v1/github/installations/callback}
+    frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    session-ttl: ${GITHUB_SESSION_TTL:7h}
+    secure-cookie: ${SESSION_COOKIE_SECURE:false}
+  llm:
+    provider: ${LLM_PROVIDER:gemini}
+    api-key: ${GEMINI_API_KEY:}
+    base-url: ${LLM_BASE_URL:}
+    model: ${LLM_MODEL:gemini-2.5-flash}
+    effort: ${LLM_EFFORT:HIGH}
+    max-output-tokens: ${LLM_MAX_OUTPUT_TOKENS:16000}
+    timeout: ${LLM_TIMEOUT:5m}
+    max-attempts: ${LLM_MAX_ATTEMPTS:2}
+  review:
+    reviewable-extensions: ${REVIEW_EXTENSIONS:.java}
+    max-files: ${REVIEW_MAX_FILES:12}
+    max-file-bytes: ${REVIEW_MAX_FILE_BYTES:120000}
+    max-context-bytes: ${REVIEW_MAX_CONTEXT_BYTES:400000}
+    hunk-context-lines: ${REVIEW_HUNK_CONTEXT_LINES:20}
+    max-findings: ${REVIEW_MAX_FINDINGS:15}
+    min-confidence: ${REVIEW_MIN_CONFIDENCE:0.55}
+  jobs:
+    enabled: ${JOB_WORKERS_ENABLED:true}
+    workers: ${JOB_WORKERS:2}
+    max-attempts: ${JOB_MAX_ATTEMPTS:3}
+    lease: ${JOB_LEASE:15m}
+    retry-backoff: ${JOB_RETRY_BACKOFF:10s}
+    max-retry-backoff: ${JOB_MAX_RETRY_BACKOFF:5m}
+    poll-timeout: ${JOB_POLL_TIMEOUT:2s}
+    maintenance-interval: ${JOB_MAINTENANCE_INTERVAL:10s}
+  runner:
+    url: ${RUNNER_URL:}
+    enabled: ${RUNNER_ENABLED:true}
+    timeout: ${RUNNER_TIMEOUT:12m}
+    run-timeout-seconds: ${RUNNER_RUN_TIMEOUT_SECONDS:300}
+    max-snapshot-bytes: ${RUNNER_MAX_SNAPSHOT_BYTES:157286400}

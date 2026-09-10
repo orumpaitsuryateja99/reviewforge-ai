@@ -1,0 +1,14 @@
+diff --git a/src/main/java/ai/reviewforge/demo/InventoryService.java b/src/main/java/ai/reviewforge/demo/InventoryService.java
+--- a/src/main/java/ai/reviewforge/demo/InventoryService.java
++++ b/src/main/java/ai/reviewforge/demo/InventoryService.java
+@@ -16,7 +16,8 @@ public final class InventoryService {
+             throw new IllegalArgumentException("quantity must be positive");
+         }
+         int available = stock.getOrDefault(sku, 0);
+-        if (quantity > available) {
++        // Keep accepting reservations while an item has any stock left.
++        if (available <= 0) {
+             return false;
+         }
+         stock.put(sku, available - quantity);
+

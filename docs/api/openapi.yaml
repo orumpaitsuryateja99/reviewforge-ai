@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  title: ReviewForge AI API
+  version: 0.1.0
+  description: >-
+    Control-plane contract. Every operation below is implemented. Long-running work returns
+    202 with a job id; clients poll the returned status URL. Errors use RFC 9457
+    application/problem+json with an additional machine-readable `code` member.
+servers:
+  - url: http://localhost:8080/api/v1
+tags:
+  - name: system
+  - name: github
+  - name: analysis
+  - name: findings
+  - name: generation
+  - name: execution
+  - name: reports
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      responses:
+        "200":
+          description: API process is available.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+  /capabilities:
+    get:
+      tags: [system]
+      operationId: getCapabilities
+      description: What this deployment can do. Credential values are never returned.
+      responses:
+        "200":
+          description: Configured integrations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capabilities" }
+  /auth/github/session:
+    get:
+      tags: [github]
+      operationId: getSession
+      responses:
+        "200":
+          description: Current browser session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionResponse" }
+  /auth/github/login:
+    get:
+      tags: [github]
+      operationId: beginLogin
+      responses:
+        "302":
+          description: Redirect to GitHub's OAuth authorization screen.
+  /auth/github/callback:
+    get:
+      tags: [github]
+      operationId: completeLogin
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302":
+          description: Session cookie issued and the browser returned to the dashboard.
+  /auth/github/logout:
+    post:
+      tags: [github]
+      operationId: logout
+      responses:
+        "204":
+          description: Session destroyed.
+  /github/installations/new:
+    get:
+      tags: [github]
+      operationId: beginInstallation
+      responses:
+        "302":
+          description: Redirect to the GitHub App installation screen.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /github/installations/callback:
+    get:
+      tags: [github]
+      operationId: completeInstallation
+      parameters:
+        - { name: installation_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302":
+          description: Installation bound to the signed-in user and repositories synchronized.
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /repositories:
+    get:
+      tags: [github]
+      operationId: listRepositories
+      parameters:
+        - name: refresh
+          in: query
+          schema: { type: boolean, default: true }
+          description: Re-synchronize from GitHub before returning.
+      responses:
+        "200":
+          description: Repositories visible to the connected installation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RepositorySummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /repositories/{repositoryId}/test-execution:
+    post:
+      tags: [execution]
+      operationId: setTestExecution
+      description: >-
+        Opts a repository in or out of generated-test execution. Execution is off by default
+        and is never enabled implicitly.
+      parameters:
+        - $ref: "#/components/parameters/RepositoryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [allowed]
+              properties:
+                allowed: { type: boolean }
+      responses:
+        "200":
+          description: Updated execution policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repositoryId, fullName, testExecutionAllowed]
+                properties:
+                  repositoryId: { type: string, format: uuid }
+                  fullName: { type: string }
+                  testExecutionAllowed: { type: boolean }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /repositories/{repositoryId}/pull-requests:
+    get:
+      tags: [github]
+      operationId: listPullRequests
+      parameters:
+        - $ref: "#/components/parameters/RepositoryId"
+      responses:
+        "200":
+          description: Open pull requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PullRequestSummary" }
+  /pull-requests/{pullRequestId}:
+    get:
+      tags: [github]
+      operationId: getPullRequest
+      parameters:
+        - $ref: "#/components/parameters/PullRequestId"
+      responses:
+        "200":
+          description: Pull request metadata and changed-file diffs at the exact head commit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PullRequestDetail" }
+  /pull-requests/{pullRequestId}/analyses:
+    post:
+      tags: [analysis]
+      operationId: createAnalysis
+      description: Queues a review pinned to the pull request's current head SHA.
+      parameters:
+        - $ref: "#/components/parameters/PullRequestId"
+      responses:
+        "202":
+          description: Analysis accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [analysis]
+      operationId: listAnalyses
+      parameters:
+        - $ref: "#/components/parameters/PullRequestId"
+      responses:
+        "200":
+          description: Analysis history, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Analysis" }
+  /analyses/{analysisId}:
+    get:
+      tags: [analysis]
+      operationId: getAnalysis
+      parameters:
+        - $ref: "#/components/parameters/AnalysisId"
+      responses:
+        "200":
+          description: Analysis progress and staleness.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /analyses/{analysisId}/findings:
+    get:
+      tags: [findings]
+      operationId: listFindings
+      parameters:
+        - $ref: "#/components/parameters/AnalysisId"
+      responses:
+        "200":
+          description: Validated findings; the list may be empty.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Finding" }
+  /analyses/{analysisId}/rejected-findings:
+    get:
+      tags: [findings]
+      operationId: listRejectedFindings
+      description: Model claims that failed validation, with the reason each was discarded.
+      parameters:
+        - $ref: "#/components/parameters/AnalysisId"
+      responses:
+        "200":
+          description: Discarded claims.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RejectedFinding" }
+  /findings/{findingId}/generated-tests:
+    post:
+      tags: [generation]
+      operationId: generateTest
+      description: >-
+        Queues generation of one failing JUnit test for the finding. The model supplies source
+        only; the server chooses the file path, writes the patch, and selects the command.
+      parameters:
+        - $ref: "#/components/parameters/FindingId"
+      responses:
+        "202":
+          description: Generation accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [generation]
+      operationId: listGeneratedTests
+      parameters:
+        - $ref: "#/components/parameters/FindingId"
+      responses:
+        "200":
+          description: Generated tests for the finding, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GeneratedTest" }
+  /generated-tests/{generatedTestId}:
+    get:
+      tags: [generation]
+      operationId: getGeneratedTest
+      parameters:
+        - $ref: "#/components/parameters/GeneratedTestId"
+      responses:
+        "200":
+          description: Proposed patch and approval state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeneratedTest" }
+  /generated-tests/{generatedTestId}/approval:
+    post:
+      tags: [generation]
+      operationId: approveGeneratedTest
+      description: Approval unlocks execution only. It never modifies the repository.
+      parameters:
+        - $ref: "#/components/parameters/GeneratedTestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [approved]
+              properties:
+                approved: { type: boolean }
+      responses:
+        "200":
+          description: Updated approval state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeneratedTest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /generated-tests/{generatedTestId}/runs:
+    post:
+      tags: [execution]
+      operationId: executeGeneratedTest
+      description: >-
+        Queues execution of an approved test in the isolated runner. Requires the repository to
+        have test execution enabled.
+      parameters:
+        - $ref: "#/components/parameters/GeneratedTestId"
+      responses:
+        "202":
+          description: Execution accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [execution]
+      operationId: listTestRuns
+      parameters:
+        - $ref: "#/components/parameters/GeneratedTestId"
+      responses:
+        "200":
+          description: Run history, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestRun" }
+  /test-runs/{testRunId}:
+    get:
+      tags: [execution]
+      operationId: getTestRun
+      parameters:
+        - $ref: "#/components/parameters/TestRunId"
+      responses:
+        "200":
+          description: Isolated execution status and bounded output.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestRun" }
+  /analyses/{analysisId}/report:
+    get:
+      tags: [reports]
+      operationId: getAnalysisReport
+      parameters:
+        - $ref: "#/components/parameters/AnalysisId"
+      responses:
+        "200":
+          description: Stable review report for the immutable analysis SHA.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewReport" }
+components:
+  responses:
+    Unauthorized:
+      description: No valid session cookie was presented.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: The signed-in user may not perform this operation.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: The resource does not exist or is not visible to this user.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: Resource state does not permit the operation.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unavailable:
+      description: A required integration is not configured on this deployment.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  parameters:
+    RepositoryId:
+      name: repositoryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PullRequestId:
+      name: pullRequestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AnalysisId:
+      name: analysisId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    FindingId:
+      name: findingId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GeneratedTestId:
+      name: generatedTestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TestRunId:
+      name: testRunId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    HealthResponse:
+      type: object
+      required: [service, status, version, timestamp]
+      properties:
+        service: { type: string, const: reviewforge-api }
+        status: { type: string, const: UP }
+        version: { type: string }
+        timestamp: { type: string, format: date-time }
+    Capabilities:
+      type: object
+      required: [github, review, testRunner]
+      properties:
+        github: { type: boolean, description: GitHub App credentials are configured. }
+        review:
+          type: object
+          required: [configured, provider]
+          properties:
+            configured: { type: boolean }
+            provider: { type: string, description: Provider name, never a credential. }
+            model: { type: string, nullable: true }
+        testRunner: { type: boolean }
+    SessionResponse:
+      type: object
+      required: [configured, authenticated]
+      properties:
+        configured: { type: boolean }
+        authenticated: { type: boolean }
+        user:
+          type: object
+          required: [id, login]
+          properties:
+            id: { type: string, format: uuid }
+            login: { type: string }
+            avatarUrl: { type: string }
+    RepositorySummary:
+      type: object
+      required: [id, githubRepositoryId, fullName, defaultBranch, privateRepository, testExecutionAllowed]
+      properties:
+        id: { type: string, format: uuid }
+        githubRepositoryId: { type: integer, format: int64 }
+        fullName: { type: string }
+        defaultBranch: { type: string }
+        privateRepository: { type: boolean }
+        testExecutionAllowed: { type: boolean }
+    PullRequestSummary:
+      type: object
+      required: [id, repositoryId, number, title, authorLogin, state, headSha, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        repositoryId: { type: string, format: uuid }
+        number: { type: integer, minimum: 1 }
+        title: { type: string }
+        authorLogin: { type: string }
+        state: { type: string, enum: [OPEN, CLOSED, MERGED] }
+        headSha: { $ref: "#/components/schemas/CommitSha" }
+        updatedAt: { type: string, format: date-time }
+    PullRequestDetail:
+      allOf:
+        - $ref: "#/components/schemas/PullRequestSummary"
+        - type: object
+          required: [baseRef, baseSha, headRef, files, filesTruncated]
+          properties:
+            baseRef: { type: string }
+            baseSha: { $ref: "#/components/schemas/CommitSha" }
+            headRef: { type: string }
+            filesTruncated: { type: boolean }
+            files:
+              type: array
+              items: { $ref: "#/components/schemas/ChangedFile" }
+    ChangedFile:
+      type: object
+      required: [path, status, additions, deletions, patch, patchTruncated]
+      properties:
+        path: { type: string }
+        previousPath: { type: string }
+        status: { type: string, enum: [ADDED, MODIFIED, REMOVED, RENAMED] }
+        additions: { type: integer, minimum: 0 }
+        deletions: { type: integer, minimum: 0 }
+        patch: { type: string, description: Unified diff; empty when GitHub supplies none. }
+        patchTruncated: { type: boolean, default: false }
+    JobAccepted:
+      type: object
+      required: [jobId, status, statusUrl]
+      properties:
+        jobId: { type: string, format: uuid }
+        status: { type: string, const: QUEUED }
+        statusUrl: { type: string, format: uri-reference }
+    Analysis:
+      type: object
+      required: [id, pullRequestId, headSha, currentHeadSha, status, progressPercent, stale, findingCount, contextFileCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        pullRequestId: { type: string, format: uuid }
+        headSha: { $ref: "#/components/schemas/CommitSha" }
+        currentHeadSha: { $ref: "#/components/schemas/CommitSha" }
+        status:
+          type: string
+          enum: [QUEUED, BUILDING_CONTEXT, ANALYZING, VALIDATING, COMPLETED, FAILED, STALE, CANCELLED]
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+        stale: { type: boolean, description: True once the pull request advanced past headSha. }
+        findingCount: { type: integer, minimum: 0 }
+        contextFileCount: { type: integer, minimum: 0 }
+        llmProvider: { type: string }
+        llmModel: { type: string }
+        error: { $ref: "#/components/schemas/JobError" }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    Finding:
+      type: object
+      additionalProperties: false
+      required: [id, analysisId, category, severity, title, explanation, filePath, startLine, endLine, evidence, failureScenario, suggestedFix, confidence]
+      properties:
+        id: { type: string, format: uuid }
+        analysisId: { type: string, format: uuid }
+        category: { type: string, enum: [CORRECTNESS, SECURITY, RELIABILITY, PERFORMANCE, CONCURRENCY, DATA_INTEGRITY, TEST_GAP] }
+        severity: { type: string, enum: [CRITICAL, HIGH, MEDIUM, LOW] }
+        title: { type: string, maxLength: 300 }
+        explanation: { type: string }
+        filePath: { type: string, description: Path validated against the analyzed commit. }
+        startLine: { type: integer, minimum: 1 }
+        endLine: { type: integer, minimum: 1 }
+        evidence: { type: string, description: Source text verified to exist in the given range. }
+        failureScenario: { type: string }
+        suggestedFix: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+    RejectedFinding:
+      type: object
+      required: [reasonCode, reasonDetail]
+      properties:
+        reasonCode:
+          type: string
+          enum: [UNKNOWN_FILE, FILE_NOT_IN_DIFF, LINE_OUT_OF_RANGE, EVIDENCE_MISMATCH, INVALID_ENUM, INVALID_CONFIDENCE, DUPLICATE, MISSING_FIELD, UNCHANGED_LINES]
+        reasonDetail: { type: string }
+        filePath: { type: string }
+        startLine: { type: integer }
+        endLine: { type: integer }
+    GeneratedTest:
+      type: object
+      required: [id, findingId, analysisId, status, targetFilePath, unifiedDiff, rationale, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        findingId: { type: string, format: uuid }
+        analysisId: { type: string, format: uuid }
+        status: { type: string, enum: [GENERATING, PROPOSED, APPROVED, REJECTED, FAILED, STALE] }
+        targetFilePath: { type: string, description: Server-chosen path under the test source root. }
+        unifiedDiff: { type: string, description: Add-only patch written by the server. }
+        fileContent: { type: string }
+        rationale: { type: string }
+        headSha: { $ref: "#/components/schemas/CommitSha" }
+        errorMessage: { type: string }
+        approvedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    TestRun:
+      type: object
+      required: [id, generatedTestId, status, commandProfile, timedOut, attempts, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        generatedTestId: { type: string, format: uuid }
+        status: { type: string, enum: [QUEUED, PREPARING, RUNNING, PASSED, FAILED, TIMED_OUT, INFRASTRUCTURE_ERROR, CANCELLED] }
+        commandProfile: { type: string, description: Server-selected allowlisted profile; never model-provided. }
+        exitCode: { type: integer }
+        testsRun: { type: integer, minimum: 0 }
+        testsPassed: { type: integer, minimum: 0 }
+        testsFailed: { type: integer, minimum: 0 }
+        testsSkipped: { type: integer, minimum: 0 }
+        stdout: { type: string, description: Size-bounded runner output. }
+        stderr: { type: string, description: Size-bounded runner output. }
+        timedOut: { type: boolean }
+        durationMillis: { type: integer, minimum: 0 }
+        attempts: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    ReviewReport:
+      type: object
+      required: [analysis, repositoryFullName, pullRequestNumber, pullRequestTitle, findingsBySeverity, findings, rejectedFindings, generatedTests, testRuns, generatedAt]
+      properties:
+        analysis: { $ref: "#/components/schemas/Analysis" }
+        repositoryFullName: { type: string }
+        pullRequestNumber: { type: integer, minimum: 1 }
+        pullRequestTitle: { type: string }
+        findingsBySeverity:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+        rejectedFindings:
+          type: array
+          items: { $ref: "#/components/schemas/RejectedFinding" }
+        generatedTests:
+          type: array
+          items: { $ref: "#/components/schemas/GeneratedTest" }
+        testRuns:
+          type: array
+          items: { $ref: "#/components/schemas/TestRun" }
+        generatedAt: { type: string, format: date-time }
+    CommitSha:
+      type: string
+      pattern: "^[0-9a-f]{40}$"
+    JobError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string, format: uri-reference }
+        code: { type: string, description: Machine-readable ReviewForge error code. }

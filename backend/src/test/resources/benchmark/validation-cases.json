@@ -1,0 +1,191 @@
+{
+  "description": "Labelled model proposals used to measure the finding validator. Each proposal states the outcome ReviewForge must produce for the supplied commit context.",
+  "cases": [
+    {
+      "id": "genuine-race-condition",
+      "filePath": "src/main/java/com/acme/OrderService.java",
+      "patch": "@@ -4,3 +4,5 @@ class OrderService {\n     void reserve(String sku, int quantity) {\n+        if (inventory.available(sku)) {\n+            inventory.reserve(sku, quantity);\n+        }\n     }",
+      "source": [
+        "package com.acme;",
+        "",
+        "class OrderService {",
+        "    void reserve(String sku, int quantity) {",
+        "        if (inventory.available(sku)) {",
+        "            inventory.reserve(sku, quantity);",
+        "        }",
+        "    }",
+        "}"
+      ],
+      "proposals": [
+        {
+          "label": "real defect on changed lines with verbatim evidence",
+          "expected": "ACCEPT",
+          "category": "CONCURRENCY",
+          "severity": "HIGH",
+          "title": "Check-then-act race can oversell inventory",
+          "explanation": "Availability is checked and then acted on without holding a lock.",
+          "startLine": 5,
+          "endLine": 6,
+          "evidence": "if (inventory.available(sku)) {",
+          "failureScenario": "Two threads reserve the last unit concurrently and both succeed.",
+          "suggestedFix": "Reserve atomically and check the result.",
+          "confidence": 0.91
+        },
+        {
+          "label": "evidence quoted from a line the model never saw",
+          "expected": "REJECT",
+          "expectedReason": "EVIDENCE_MISMATCH",
+          "category": "CORRECTNESS",
+          "severity": "MEDIUM",
+          "title": "Quantity is never validated",
+          "explanation": "Claims a guard that does not exist.",
+          "startLine": 5,
+          "endLine": 6,
+          "evidence": "if (quantity <= 0) throw new IllegalArgumentException();",
+          "failureScenario": "Negative quantities pass through.",
+          "suggestedFix": "Validate quantity.",
+          "confidence": 0.8
+        },
+        {
+          "label": "defect reported on an untouched line",
+          "expected": "REJECT",
+          "expectedReason": "UNCHANGED_LINES",
+          "category": "CORRECTNESS",
+          "severity": "LOW",
+          "title": "Package declaration should be lowercase",
+          "explanation": "Points at code this pull request did not change.",
+          "startLine": 1,
+          "endLine": 1,
+          "evidence": "package com.acme;",
+          "failureScenario": "None.",
+          "suggestedFix": "None.",
+          "confidence": 0.9
+        },
+        {
+          "label": "line range past the end of the analyzed revision",
+          "expected": "REJECT",
+          "expectedReason": "LINE_OUT_OF_RANGE",
+          "category": "RELIABILITY",
+          "severity": "HIGH",
+          "title": "Resource is never closed",
+          "explanation": "Refers to lines that do not exist at this commit.",
+          "startLine": 120,
+          "endLine": 140,
+          "evidence": "stream.close();",
+          "failureScenario": "File handles leak.",
+          "suggestedFix": "Use try-with-resources.",
+          "confidence": 0.85
+        },
+        {
+          "label": "file that was never supplied to the model",
+          "expected": "REJECT",
+          "expectedReason": "UNKNOWN_FILE",
+          "category": "SECURITY",
+          "severity": "CRITICAL",
+          "title": "Credentials written to the log",
+          "explanation": "Names a file outside the analysis context.",
+          "filePathOverride": "src/main/java/com/acme/Ghost.java",
+          "startLine": 3,
+          "endLine": 4,
+          "evidence": "log.info(apiKey);",
+          "failureScenario": "Secrets end up in log aggregation.",
+          "suggestedFix": "Redact the value.",
+          "confidence": 0.99
+        },
+        {
+          "label": "confidence below the configured floor",
+          "expected": "REJECT",
+          "expectedReason": "INVALID_CONFIDENCE",
+          "category": "PERFORMANCE",
+          "severity": "LOW",
+          "title": "Reservation may be slow under contention",
+          "explanation": "Speculative.",
+          "startLine": 6,
+          "endLine": 6,
+          "evidence": "inventory.reserve(sku, quantity);",
+          "failureScenario": "Possible latency.",
+          "suggestedFix": "Measure first.",
+          "confidence": 0.2
+        },
+        {
+          "label": "category outside the supported taxonomy",
+          "expected": "REJECT",
+          "expectedReason": "INVALID_ENUM",
+          "category": "STYLE",
+          "severity": "HIGH",
+          "title": "Braces should be on the same line",
+          "explanation": "Not a supported category.",
+          "startLine": 5,
+          "endLine": 5,
+          "evidence": "if (inventory.available(sku)) {",
+          "failureScenario": "None.",
+          "suggestedFix": "None.",
+          "confidence": 0.9
+        }
+      ]
+    },
+    {
+      "id": "null-dereference-in-new-method",
+      "filePath": "src/main/java/com/acme/PricingService.java",
+      "patch": "@@ -6,0 +7,4 @@ class PricingService {\n+    BigDecimal discountFor(Customer customer) {\n+        return customer.tier().discount();\n+    }\n+",
+      "source": [
+        "package com.acme;",
+        "",
+        "import java.math.BigDecimal;",
+        "",
+        "class PricingService {",
+        "",
+        "    BigDecimal discountFor(Customer customer) {",
+        "        return customer.tier().discount();",
+        "    }",
+        "}"
+      ],
+      "proposals": [
+        {
+          "label": "real nullable dereference on an added line",
+          "expected": "ACCEPT",
+          "category": "CORRECTNESS",
+          "severity": "HIGH",
+          "title": "Nullable tier is dereferenced without a guard",
+          "explanation": "A customer without a tier produces a NullPointerException.",
+          "startLine": 8,
+          "endLine": 8,
+          "evidence": "return customer.tier().discount();",
+          "failureScenario": "A newly registered customer has no tier and pricing fails.",
+          "suggestedFix": "Return the default discount when the tier is absent.",
+          "confidence": 0.88
+        },
+        {
+          "label": "identical repeat of an accepted finding",
+          "expected": "REJECT",
+          "expectedReason": "DUPLICATE",
+          "category": "CORRECTNESS",
+          "severity": "HIGH",
+          "title": "Nullable tier is dereferenced without a guard",
+          "explanation": "Same defect proposed twice.",
+          "startLine": 8,
+          "endLine": 8,
+          "evidence": "return customer.tier().discount();",
+          "failureScenario": "Same as above.",
+          "suggestedFix": "Same as above.",
+          "confidence": 0.86
+        },
+        {
+          "label": "missing required field",
+          "expected": "REJECT",
+          "expectedReason": "MISSING_FIELD",
+          "category": "CORRECTNESS",
+          "severity": "MEDIUM",
+          "title": "Discount is unbounded",
+          "explanation": "",
+          "startLine": 8,
+          "endLine": 8,
+          "evidence": "return customer.tier().discount();",
+          "failureScenario": "Discount could exceed the price.",
+          "suggestedFix": "Clamp the discount.",
+          "confidence": 0.7
+        }
+      ]
+    }
+  ]
+}

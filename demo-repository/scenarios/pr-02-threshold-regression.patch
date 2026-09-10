@@ -1,0 +1,14 @@
+diff --git a/src/main/java/ai/reviewforge/demo/ShippingQuote.java b/src/main/java/ai/reviewforge/demo/ShippingQuote.java
+--- a/src/main/java/ai/reviewforge/demo/ShippingQuote.java
++++ b/src/main/java/ai/reviewforge/demo/ShippingQuote.java
+@@ -12,7 +12,8 @@ public final class ShippingQuote {
+         if (subtotal == null || subtotal.signum() < 0) {
+             throw new IllegalArgumentException("subtotal must be non-negative");
+         }
+-        if (subtotal.compareTo(FREE_SHIPPING_THRESHOLD) >= 0) {
++        // Orders over the threshold receive free delivery.
++        if (subtotal.compareTo(FREE_SHIPPING_THRESHOLD) > 0) {
+             return BigDecimal.ZERO;
+         }
+         return STANDARD_SHIPPING;
+

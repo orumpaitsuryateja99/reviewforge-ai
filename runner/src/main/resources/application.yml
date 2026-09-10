@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: reviewforge-runner
+  servlet:
+    multipart:
+      max-file-size: ${RUNNER_MAX_SNAPSHOT_SIZE:200MB}
+      max-request-size: ${RUNNER_MAX_SNAPSHOT_SIZE:200MB}
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  port: ${SERVER_PORT:8090}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+runner:
+  workspace-root: ${RUNNER_WORKSPACE:/tmp/reviewforge-runs}
+  max-run-seconds: ${RUNNER_MAX_RUN_SECONDS:600}
+  default-run-seconds: ${RUNNER_DEFAULT_RUN_SECONDS:300}
+  max-output-bytes: ${RUNNER_MAX_OUTPUT_BYTES:65536}
+  max-extracted-bytes: ${RUNNER_MAX_EXTRACTED_BYTES:536870912}
+  max-extracted-entries: ${RUNNER_MAX_EXTRACTED_ENTRIES:60000}
+  maven-command: ${RUNNER_MAVEN_COMMAND:mvn}
+  maven-repository-path: ${RUNNER_MAVEN_REPOSITORY:/opt/reviewforge-m2/repository}
+  home-directory: ${RUNNER_HOME:/tmp/reviewforge-home}
+  offline: ${RUNNER_MAVEN_OFFLINE:true}
