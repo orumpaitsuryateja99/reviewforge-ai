@@ -16,3 +16,6 @@ frontend/.env.local
 
 *.log
 coverage/
+
+# Personal resume generated alongside the project; do not publish it with the source.
+Suryateja_Orumpati_Resume.*
