@@ -182,7 +182,7 @@ public class GitHubApiClient {
             ArchiveResponse response = restClient.get()
                     .uri("/repos/{owner}/{repository}/tarball/{ref}", owner, repository, ref)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                    .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_OCTET_STREAM_VALUE)
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
                     .header("X-GitHub-Api-Version", properties.apiVersion())
                     .exchange((request, clientResponse) -> {
                         HttpStatusCode status = clientResponse.getStatusCode();
