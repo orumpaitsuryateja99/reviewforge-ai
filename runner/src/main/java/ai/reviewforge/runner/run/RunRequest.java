@@ -11,8 +11,8 @@ import jakarta.validation.constraints.Size;
  */
 public record RunRequest(
         @NotBlank
-        @Pattern(regexp = "^(?!/)(?!.*(^|/)\\.\\.(/|$))src/test/[A-Za-z0-9._/-]+\\.java$",
-                message = "patchPath must be a relative path under src/test")
+        @Pattern(regexp = "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?:[A-Za-z0-9._-]+/)*src/test/[A-Za-z0-9._/-]+\\.java$",
+                message = "patchPath must be a relative path under a Maven module's src/test tree")
         String patchPath,
 
         @NotBlank

@@ -18,6 +18,13 @@ class RunRequestValidationTest {
     }
 
     @Test
+    void acceptsATestPathInsideANestedMavenModule() {
+        assertThat(validator.validate(request(
+                "demo-repository/src/test/java/com/acme/OrderReviewForgeTest.java",
+                "com.acme.OrderReviewForgeTest"))).isEmpty();
+    }
+
+    @Test
     void refusesPathsOutsideTheTestTree() {
         assertThat(validator.validate(request("src/main/java/com/acme/Order.java", "com.acme.OrderTest")))
                 .isNotEmpty();
