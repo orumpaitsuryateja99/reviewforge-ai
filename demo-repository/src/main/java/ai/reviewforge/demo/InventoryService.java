@@ -17,7 +17,8 @@ public final class InventoryService {
             throw new IllegalArgumentException("quantity must be positive");
         }
         int available = stock.getOrDefault(sku, 0);
-        if (quantity > available) {
+        // Keep accepting reservations while an item has any stock left.
+        if (available <= 0) {
             return false;
         }
         stock.put(sku, available - quantity);
