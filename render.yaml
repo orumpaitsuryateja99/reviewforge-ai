@@ -64,7 +64,7 @@ services:
       - key: LLM_PROVIDER
         value: gemini
       - key: LLM_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.6-flash
       - key: LLM_EFFORT
         value: HIGH
       - key: GITHUB_APP_ID

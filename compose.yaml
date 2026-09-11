@@ -52,7 +52,7 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.6-flash}
       LLM_EFFORT: ${LLM_EFFORT:-HIGH}
       JOB_WORKERS: ${JOB_WORKERS:-2}
       RUNNER_URL: ${RUNNER_URL:-http://runner:8090}

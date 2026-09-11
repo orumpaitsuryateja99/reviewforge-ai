@@ -74,7 +74,7 @@ reviewforge:
     provider: ${LLM_PROVIDER:gemini}
     api-key: ${GEMINI_API_KEY:}
     base-url: ${LLM_BASE_URL:}
-    model: ${LLM_MODEL:gemini-2.5-flash}
+    model: ${LLM_MODEL:gemini-3.6-flash}
     effort: ${LLM_EFFORT:HIGH}
     max-output-tokens: ${LLM_MAX_OUTPUT_TOKENS:16000}
     timeout: ${LLM_TIMEOUT:5m}

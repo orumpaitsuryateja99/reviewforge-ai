@@ -196,14 +196,14 @@ depends on an `LlmClient` port, and `GeminiLlmClient` is the shipped adapter, bu
 official Gen AI Java SDK and asking Gemini for schema-valid structured output.
 
 Create a key in [Google AI Studio](https://aistudio.google.com/app/apikey). The default
-`gemini-2.5-flash` model has a free tier; consult Google's current
+`gemini-3.6-flash` is the current model used by the project; consult Google's
 [Gemini API pricing and data-use table](https://ai.google.dev/gemini-api/docs/pricing) before
 sending private repository content.
 
 ```dotenv
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your-key
-LLM_MODEL=gemini-2.5-flash
+LLM_MODEL=gemini-3.6-flash
 LLM_EFFORT=HIGH
 ```
 
@@ -253,7 +253,7 @@ JUnit tests.
 | `SESSION_COOKIE_SECURE` | backend | `false` | Set `true` behind production HTTPS |
 | `LLM_PROVIDER` | backend | `gemini` | Selects the model adapter; unknown values fail at startup |
 | `GEMINI_API_KEY` | backend | — | Provider credential; blank disables review |
-| `LLM_MODEL` | backend | `gemini-2.5-flash` | Model id used for review and generation |
+| `LLM_MODEL` | backend | `gemini-3.6-flash` | Model id used for review and generation |
 | `LLM_EFFORT` | backend | `HIGH` | `LOW`–`MAX` reasoning effort |
 | `LLM_MAX_OUTPUT_TOKENS` | backend | `16000` | Output ceiling per model call |
 | `REVIEW_MAX_FILES` | backend | `12` | Files sent to the model per analysis |
